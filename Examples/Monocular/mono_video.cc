@@ -29,18 +29,18 @@
 
 using namespace std;
 
-void LoadImages(const string &strImagePath, const string &strPathTimes,
-                vector<string> &vstrImages, vector<double> &vTimeStamps);
+// void LoadImages( const string &strPathTimes,
+//                 vector<string> &vstrImages, vector<double> &vTimeStamps);
 
 int main(int argc, char **argv)
 {  
-    if(argc < 5)
+    if(argc != 4)
     {
-        cerr << endl << "Usage: ./mono_euroc path_to_vocabulary path_to_settings path_to_sequence_folder_1 path_to_times_file_1 (path_to_image_folder_2 path_to_times_file_2 ... path_to_image_folder_N path_to_times_file_N) (trajectory_file_name)" << endl;
+        cerr << endl << "Usage: ./mono_video path_to_vocabulary path_to_settings path_to_video_file" << endl;
         return 1;
     }
 
-    const int num_seq = (argc-3)/2;
+    const int num_seq = 1;
     cout << "num_seq = " << num_seq << endl;
     bool bFileName= (((argc-3) % 2) == 1);
     string file_name;
@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     for (seq = 0; seq<num_seq; seq++)
     {
         cout << "Loading images for sequence " << seq << "...";
-        LoadImages(string(argv[(2*seq)+3]) + "/mav0/cam0/data", string(argv[(2*seq)+4]), vstrImageFilenames[seq], vTimestampsCam[seq]);
+        // LoadImages( string(argv[(2*seq)+4]), vstrImageFilenames[seq], vTimestampsCam[seq]);
         cout << "LOADED!" << endl;
 
         nImages[seq] = vstrImageFilenames[seq].size();
@@ -80,70 +80,65 @@ int main(int argc, char **argv)
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::MONOCULAR, true);
+     // Main loop
 
-    for (seq = 0; seq<num_seq; seq++)
+   
+
+    cv::VideoCapture capture(argv[3]);
+   
+    if( !capture.isOpened() )
+    {
+        printf("AVI file can not open.\n");
+        return 1;
+    }
+
+    cv::Mat im;
+    int proccIm = 0;
+    double timestamp = 0;
+
+    while(1)
     {
 
-        // Main loop
-        cv::Mat im;
-        int proccIm = 0;
-        for(int ni=0; ni<nImages[seq]; ni++, proccIm++)
-        {
+        // Read image from file
+        capture >> im;
+        double tframe = timestamp ;
+        timestamp += 0.05;
+;
+        
 
-            // Read image from file
-            im = cv::imread(vstrImageFilenames[seq][ni],cv::IMREAD_UNCHANGED);
-            double tframe = vTimestampsCam[seq][ni];
-
-            if(im.empty())
-            {
-                cerr << endl << "Failed to load image at: "
-                     <<  vstrImageFilenames[seq][ni] << endl;
-                return 1;
-            }
-
-    #ifdef COMPILEDWITHC11
-            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-    #else
-            std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
-    #endif
-
-            // Pass the image to the SLAM system
-            SLAM.TrackMonocular(im,tframe);
-
-    #ifdef COMPILEDWITHC11
-            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-    #else
-            std::chrono::monotonic_clock::time_point t2 = std::chrono::monotonic_clock::now();
-    #endif
-
-#ifdef REGISTER_TIMES
-            double t_track = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2 - t1).count();
-            SLAM.InsertTrackTime(t_track);
+#ifdef COMPILEDWITHC11
+        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+#else
+        std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
 #endif
 
-            double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+        // Pass the image to the SLAM system
+        SLAM.TrackMonocular(im,tframe);
 
-            vTimesTrack[ni]=ttrack;
+#ifdef COMPILEDWITHC11
+        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+#else
+        std::chrono::monotonic_clock::time_point t2 = std::chrono::monotonic_clock::now();
+#endif
 
-            // Wait to load the next frame
-            double T=0;
-            if(ni<nImages[seq]-1)
-                T = vTimestampsCam[seq][ni+1]-tframe;
-            else if(ni>0)
-                T = tframe-vTimestampsCam[seq][ni-1];
+#ifdef REGISTER_TIMES
+        double t_track = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2 - t1).count();
+        SLAM.InsertTrackTime(t_track);
+#endif
 
-            if(ttrack<T)
-                usleep((T-ttrack)*1e6);
-        }
+        double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
-        if(seq < num_seq - 1)
-        {
-            cout << "Changing the dataset" << endl;
+        // Wait to load the next frame
+        double T=0;
+       
+        T = (timestamp-tframe);
 
-            SLAM.ChangeDataset();
-        }
-
+        if(ttrack<T)
+            usleep((T-ttrack)*1e6);
     }
+
+
+    
     // Stop all threads
     SLAM.Shutdown();
 
@@ -164,26 +159,25 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void LoadImages(const string &strImagePath, const string &strPathTimes,
-                vector<string> &vstrImages, vector<double> &vTimeStamps)
-{
-    ifstream fTimes;
-    fTimes.open(strPathTimes.c_str());
-    vTimeStamps.reserve(5000);
-    vstrImages.reserve(5000);
-    while(!fTimes.eof())
-    {
-        string s;
-        getline(fTimes,s);
-        if(!s.empty())
-        {
-            stringstream ss;
-            ss << s;
-            vstrImages.push_back(strImagePath + "/" + ss.str() + ".png");
-            double t;
-            ss >> t;
-            vTimeStamps.push_back(t/1e9);
+// void LoadImages(const string &strPathTimes,
+//                 vector<string> &vstrImages, vector<double> &vTimeStamps)
+// {
+//     ifstream fTimes;
+//     vTimeStamps.reserve(5000);
+//     vstrImages.reserve(5000);
+//     while(!fTimes.eof())
+//     {
+//         string s;
+//         getline(fTimes,s);
+//         if(!s.empty())
+//         {
+//             stringstream ss;
+//             ss << s;
+//             vstrImages.push_back(strImagePath + "/" + ss.str() + ".png");
+//             double t;
+//             ss >> t;
+//             vTimeStamps.push_back(t/1e9);
 
-        }
-    }
-}
+//         }
+//     }
+// }

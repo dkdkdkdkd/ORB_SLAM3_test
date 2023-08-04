@@ -93,7 +93,7 @@ int main(int argc, char **argv)
             // Read image from file
             im = cv::imread(vstrImageFilenames[seq][ni],cv::IMREAD_UNCHANGED);
             double tframe = vTimestampsCam[seq][ni];
-
+            
             if(im.empty())
             {
                 cerr << endl << "Failed to load image at: "
@@ -124,16 +124,24 @@ int main(int argc, char **argv)
             double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
             vTimesTrack[ni]=ttrack;
-
+            printf("ttrack  %lf\n",ttrack);
             // Wait to load the next frame
             double T=0;
-            if(ni<nImages[seq]-1)
+            if(ni<nImages[seq]-1){
                 T = vTimestampsCam[seq][ni+1]-tframe;
-            else if(ni>0)
+                
+            }
+            else if(ni>0){
                 T = tframe-vTimestampsCam[seq][ni-1];
+                
+            }
+                
 
-            if(ttrack<T)
+            if(ttrack<T){
+                
                 usleep((T-ttrack)*1e6);
+            }
+                
         }
 
         if(seq < num_seq - 1)

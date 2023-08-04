@@ -168,6 +168,14 @@ add_executable(mono_euroc
 Examples/Monocular/mono_euroc.cc)
 target_link_libraries(mono_euroc ${PROJECT_NAME})
 
+add_executable(mono_video
+Examples/Monocular/mono_video.cc)
+target_link_libraries(mono_video ${PROJECT_NAME})
+
+add_executable(opencv_test
+Examples/Monocular/opencv_test.cc)
+target_link_libraries(opencv_test ${PROJECT_NAME})
+
 add_executable(mono_tum_vi
 Examples/Monocular/mono_tum_vi.cc)
 target_link_libraries(mono_tum_vi ${PROJECT_NAME})
